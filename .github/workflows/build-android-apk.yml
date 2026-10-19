@@ -1,0 +1,91 @@
+name: Build TOGU Schedule Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Accept Android Licenses
+        run: |
+          yes | sdkmanager --licenses || true
+
+      - name: Install dependencies & Capacitor
+        run: |
+          npm install
+          npm install @capacitor/core @capacitor/android @capacitor/local-notifications
+          npm install -D @capacitor/cli
+
+      - name: Prepare Source Files
+        run: |
+          mkdir -p src
+          if [ ! -f "src/main.tsx" ]; then
+            cat << 'EOF' > src/main.tsx
+          import React from 'react'
+          import ReactDOM from 'react-dom/client'
+          import App from './App.tsx'
+          import './index.css'
+
+          ReactDOM.createRoot(document.getElementById('root')!).render(
+            <React.StrictMode>
+              <App />
+            </React.StrictMode>,
+          )
+          EOF
+          fi
+          if [ ! -f "src/index.css" ]; then
+            echo '@tailwind base; @tailwind components; @tailwind utilities;' > src/index.css
+          fi
+          if [ ! -f "src/App.tsx" ]; then
+            if [ -f "App.tsx" ]; then
+              cp App.tsx src/App.tsx
+            elif [ -f "togu_schedule_app.tsx" ]; then
+              cp togu_schedule_app.tsx src/App.tsx
+            elif [ -f "togu-schedule/src/App.tsx" ]; then
+              cp togu-schedule/src/App.tsx src/App.tsx
+            fi
+          fi
+
+      - name: Build Web Production Bundle
+        run: npx vite build
+
+      - name: Sync Capacitor Android
+        run: |
+          rm -rf android
+          npx cap add android
+          npx cap sync android
+
+      - name: Build Debug APK via Gradle
+        working-directory: ./android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload Ready-to-Install APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: togu-schedule-android-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
