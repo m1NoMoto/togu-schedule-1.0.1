@@ -73,6 +73,16 @@ jobs:
 
       - name: Sync Capacitor Android
         run: |
+          if [ ! -f "capacitor.config.json" ] && [ ! -f "capacitor.config.ts" ]; then
+            cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "ru.togudv.schedule.student",
+            "appName": "ТОГУ Расписание",
+            "webDir": "dist",
+            "bundledWebRuntime": false
+          }
+          EOF
+          fi
           rm -rf android
           npx cap add android
           npx cap sync android
